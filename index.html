@@ -1,0 +1,509 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Pirate School Map</title>
+
+  <style>
+    :root{
+      --ink:#2b2320;
+      --shadow: 0 18px 45px rgba(0,0,0,.18);
+      --radius: 18px;
+      --card: rgba(255,255,255,.80);
+      --card2: rgba(255,255,255,.72);
+    }
+
+    *{ box-sizing:border-box; }
+
+    /* Background خفيفة لكل الموقع */
+    body{
+      margin:0;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      color:var(--ink);
+      min-height:100vh;
+      display:flex;
+      justify-content:center;
+      padding:24px;
+      background:#111;
+      position: relative;
+      overflow-x:hidden;
+    }
+    body::before{
+      content:"";
+      position: fixed;
+      inset: 0;
+      background-image: url("map.jpg");
+      background-size: cover;
+      background-position: center;
+      background-repeat: no-repeat;
+      opacity: .14;
+      z-index:-2;
+      filter:saturate(.95);
+    }
+    body::after{
+      content:"";
+      position: fixed;
+      inset: 0;
+      background:
+        radial-gradient(900px 500px at 10% 10%, rgba(255,255,255,.32), transparent 60%),
+        radial-gradient(900px 500px at 90% 30%, rgba(255,255,255,.24), transparent 60%),
+        linear-gradient(140deg, rgba(0,0,0,.65), rgba(0,0,0,.80));
+      z-index:-1;
+    }
+
+    .wrap{
+      width:min(1200px, 100%);
+      display:grid;
+      grid-template-columns: 1.25fr .75fr;
+      gap:18px;
+      align-items:start;
+    }
+    @media (max-width: 980px){
+      .wrap{ grid-template-columns:1fr; }
+    }
+
+    /* Map card */
+    .mapCard{
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow:hidden;
+      border: 1px solid rgba(255,255,255,.18);
+      background: rgba(255,255,255,.08);
+      backdrop-filter: blur(6px);
+    }
+    .mapHeader{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      padding:14px 16px;
+      background: linear-gradient(90deg, rgba(0,0,0,.35), rgba(0,0,0,.10));
+      border-bottom:1px solid rgba(255,255,255,.12);
+      color:#fff;
+      gap:12px;
+    }
+    .title{
+      font-weight:900;
+      letter-spacing:.2px;
+      display:flex;
+      align-items:center;
+      gap:10px;
+    }
+    .badge{
+      font-size:12px;
+      padding:6px 10px;
+      border-radius:999px;
+      background: rgba(255,255,255,.14);
+      border:1px solid rgba(255,255,255,.18);
+      white-space:nowrap;
+    }
+
+    .mapStage{ padding:16px; }
+
+    /* ✅ الخريطة داخل المربع */
+    .mapCanvas{
+      position:relative;
+      width:100%;
+      aspect-ratio: 16 / 9;
+      border-radius: 14px;
+      overflow:hidden;
+      border:1px solid rgba(255,255,255,.16);
+      box-shadow: 0 14px 40px rgba(0,0,0,.35);
+
+      background-image: url("map.jpg");
+      background-size: cover;
+      background-position: center;
+      background-repeat:no-repeat;
+    }
+    .mapCanvas::after{
+      content:"";
+      position:absolute; inset:0;
+      background:
+        radial-gradient(900px 360px at 50% 110%, rgba(0,0,0,.18), transparent 60%),
+        linear-gradient(180deg, rgba(255,255,255,.05), rgba(0,0,0,.10));
+      pointer-events:none;
+      z-index:1;
+    }
+
+    /* Path */
+    svg.path{
+      position:absolute;
+      inset:0;
+      width:100%;
+      height:100%;
+      pointer-events:none;
+      z-index:2;
+    }
+    .dash{
+      fill:none;
+      stroke:#c14b3f;
+      stroke-width:6;
+      stroke-linecap:round;
+      stroke-dasharray: 8 14;
+      opacity:.92;
+      filter: drop-shadow(0 2px 0 rgba(0,0,0,.20));
+    }
+
+    /* Walker */
+    .walker{
+      position:absolute;
+      width:16px; height:16px;
+      border-radius:50%;
+      background: radial-gradient(circle at 30% 30%, #fff, #ffd36a 45%, #c7891f 80%);
+      box-shadow: 0 8px 18px rgba(0,0,0,.28);
+      transform: translate(-50%,-50%);
+      border:2px solid rgba(0,0,0,.12);
+      z-index:4;
+      animation: bob .6s ease-in-out infinite alternate;
+    }
+    .walker:after{
+      content:"";
+      position:absolute; left:50%; top:50%;
+      width:22px; height:22px;
+      transform: translate(-50%,-50%);
+      border-radius:50%;
+      background: rgba(255,211,106,.18);
+      animation: pulse 1.2s ease-in-out infinite;
+    }
+    @keyframes bob{ to{ transform: translate(-50%,-54%); } }
+    @keyframes pulse{
+      0%{opacity:.25; transform:translate(-50%,-50%) scale(.7)}
+      100%{opacity:0; transform:translate(-50%,-50%) scale(1.7)}
+    }
+
+    /* Pins */
+    .pin{
+      position:absolute;
+      transform: translate(-50%,-50%);
+      z-index:5;
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      gap:6px;
+      cursor:pointer;
+      user-select:none;
+    }
+    .pin .dot{
+      width:18px; height:18px;
+      border-radius:50%;
+      background: radial-gradient(circle at 30% 30%, #fff, #7cf0ff 45%, #1c86a0 85%);
+      border:2px solid rgba(0,0,0,.15);
+      box-shadow: 0 10px 18px rgba(0,0,0,.22);
+      position:relative;
+      z-index:2;
+    }
+    .pin .dot:before{
+      content:"";
+      position:absolute;
+      left:50%;
+      top:100%;
+      width:2px;
+      height:14px;
+      background: rgba(0,0,0,.18);
+      transform:translateX(-50%);
+    }
+    .pin .label{
+      font-size:12px;
+      padding:6px 10px;
+      border-radius:999px;
+      background: rgba(255,255,255,.92);
+      border:1px solid rgba(0,0,0,.12);
+      box-shadow: 0 10px 20px rgba(0,0,0,.12);
+      white-space:nowrap;
+      z-index:2;
+    }
+    .pin.active .dot{
+      background: radial-gradient(circle at 30% 30%, #fff, #ffdf7c 45%, #cc8a12 85%);
+      box-shadow: 0 12px 26px rgba(202,163,77,.55);
+    }
+    .pin.active .label{ border-color: rgba(202,163,77,.85); }
+
+    /* ✅ Preview صورة جنب كل location */
+   /* ✅ Preview تحت كل pin مباشرة */
+.preview{
+  position:absolute;
+  left:50%;
+  top: calc(100% + 12px);   /* تحت النقطة */
+  transform: translateX(-50%) scale(.92);
+  width: 120px;
+  height: 82px;
+  border-radius: 14px;
+  overflow:hidden;
+  border: 2px solid rgba(255,255,255,.78);
+  box-shadow: 0 18px 35px rgba(0,0,0,.28);
+  background: rgba(0,0,0,.08);
+  opacity: .95;
+  transition: transform .25s ease, opacity .25s ease, filter .25s ease;
+  z-index:1;
+  backdrop-filter: blur(2px);
+}
+/* ✅ خلي صورة Location 3 فوق النقطة */
+.pin-top .preview{
+  top: auto;
+  bottom: calc(100% + 12px);   /* فوق النقطة */
+  transform: translateX(-50%) scale(.92);
+}
+
+/* hover */
+.pin-top:hover .preview{
+  transform: translateX(-50%) scale(1.02);
+}
+
+/* active animation */
+.pin-top.active .preview{
+  transform: translateX(-50%) scale(1.08);
+  animation: zoomPulse 1.05s ease-in-out infinite;
+}
+.preview img{
+  width:100%;
+  height:100%;
+  object-fit:cover;
+  display:block;
+}
+
+/* Hover */
+.pin:hover .preview{
+  transform: translateX(-50%) scale(1.02);
+  opacity: 1;
+  filter: saturate(1.05);
+}
+
+/* ✅ Active: تكبير/تصغير مثل مكبر */
+.pin.active .preview{
+  opacity:1;
+  transform: translateX(-50%) scale(1.08);
+  animation: zoomPulse 1.05s ease-in-out infinite;
+  border-color: rgba(202,163,77,.95);
+  box-shadow: 0 22px 45px rgba(202,163,77,.25), 0 18px 35px rgba(0,0,0,.28);
+}
+
+@keyframes zoomPulse{
+  0%   { transform: translateX(-50%) scale(1.03); }
+  50%  { transform: translateX(-50%) scale(1.12); }
+  100% { transform: translateX(-50%) scale(1.03); }
+}
+
+    /* Side panel */
+    .panel{
+      background: linear-gradient(180deg, rgba(255,255,255,.92), rgba(255,255,255,.78));
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow:hidden;
+      border: 1px solid rgba(0,0,0,.10);
+    }
+    .panelTop{
+      padding:14px 16px;
+      display:flex; align-items:center; justify-content:space-between;
+      gap:10px;
+      border-bottom:1px solid rgba(0,0,0,.08);
+      background: linear-gradient(90deg, rgba(202,163,77,.22), rgba(0,0,0,.04));
+    }
+    .panelTop h2{ margin:0; font-size:16px; font-weight:900; }
+    .controls{ display:flex; gap:8px; flex-wrap:wrap; }
+    button{
+      border:1px solid rgba(0,0,0,.14);
+      background: rgba(255,255,255,.92);
+      border-radius:12px;
+      padding:9px 10px;
+      font-weight:800;
+      cursor:pointer;
+      transition: transform .12s ease, box-shadow .12s ease;
+      box-shadow: 0 10px 18px rgba(0,0,0,.08);
+    }
+    button:hover{ transform: translateY(-1px); }
+    button:active{ transform: translateY(0px); box-shadow:none; }
+
+    .viewer{ padding:14px 16px 16px; }
+    .bigImg{
+      width:100%;
+      aspect-ratio: 4 / 3;
+      border-radius: 14px;
+      overflow:hidden;
+      border:1px solid rgba(0,0,0,.12);
+      background: rgba(0,0,0,.04);
+      box-shadow: 0 14px 30px rgba(0,0,0,.10);
+    }
+    .bigImg img{ width:100%; height:100%; object-fit:cover; display:block; }
+
+    .caption{
+      margin-top:10px;
+      display:flex;
+      justify-content:space-between;
+      gap:12px;
+      align-items:flex-start;
+    }
+    .where{ font-weight:900; font-size:14px; }
+    .hint{ font-size:12px; opacity:.75; line-height:1.35; }
+  </style>
+</head>
+
+<body>
+  <div class="wrap">
+
+    <!-- MAP -->
+    <section class="mapCard">
+      <div class="mapHeader">
+        <div class="title">🏴‍☠️ Pirate Map locations Walk<br>اتّبع الأرقام و المواقع حسب الترتيب<span class="badge">Lobby → 1 → 2 → 3 → 4</span></div>
+        <div class="badge">Click pins / Next</div>
+      </div>
+
+      <div class="mapStage">
+        <div class="mapCanvas" id="map">
+
+          <!-- Path (إذا بدك منعدّله حسب خريطتك) -->
+          <svg class="path" viewBox="0 0 1000 562" preserveAspectRatio="none">
+            <path id="route" class="dash"
+              d="M 120 420
+                 C 220 520, 420 520, 480 430
+                 S 620 250, 720 280
+                 S 860 360, 800 430
+                 S 650 520, 520 500
+                 S 320 450, 200 380
+                 S 170 340, 240 300
+                 S 420 260, 520 210
+                 S 650 150, 840 120" />
+          </svg>
+
+          <div class="walker" id="walker"></div>
+
+          <!-- Pins + previews -->
+         <div class="pin" data-stop="lobby" style="left:12%; top:74%;">
+  <div class="preview"><img src="lobby.jpeg" alt="Lobby"></div>
+  <div class="dot"></div><div class="label">Lobby</div>
+</div>
+
+<div class="pin" data-stop="1" style="left:48%; top:64%;">
+  <div class="preview"><img src="1.jpeg" alt="Location 1"></div>
+  <div class="dot"></div><div class="label">Location 1</div>
+</div>
+
+<div class="pin" data-stop="2" style="left:72%; top:50%;">
+  <div class="preview"><img src="2.jpeg" alt="Location 2"></div>
+  <div class="dot"></div><div class="label">Location 2</div>
+</div>
+
+<div class="pin pin-top" data-stop="3" style="left:52%; top:36%;">
+  <div class="preview"><img src="3.jpeg" alt="Location 3"></div>
+  <div class="dot"></div><div class="label">Location 3</div>
+</div>
+
+<div class="pin" data-stop="4" style="left:85%; top:22%;">
+  <div class="preview"><img src="4.jpeg" alt="Location 4"></div>
+  <div class="dot"></div><div class="label">Location 4</div>
+</div>
+
+        </div>
+      </div>
+    </section>
+
+    <!-- VIEWER -->
+    <aside class="panel">
+      <div class="panelTop">
+        <h2 id="panelTitle">Lobby</h2>
+        <div class="controls">
+          <button id="prevBtn" type="button">⬅ Prev</button>
+          <button id="nextBtn" type="button">Next ➡</button>
+        </div>
+      </div>
+
+      <div class="viewer">
+        <div class="bigImg"><img id="panelImg" src="lobby.jpeg" alt="Location image"></div>
+        <div class="caption">
+          <div class="where" id="panelWhere">Start here: Lobby</div>
+          <div class="hint"></div>
+        </div>
+      </div>
+    </aside>
+
+  </div>
+
+  <script>
+    const stops = [
+      { key:"lobby", title:"Lobby", img:"lobby.jpeg", where:"Start here: Lobby", t:0.00 },
+      { key:"1",     title:"Location 1", img:"1.jpeg", where:"You reached Location 1", t:0.28 },
+      { key:"2",     title:"Location 2", img:"2.jpeg", where:"You reached Location 2", t:0.48 },
+      { key:"3",     title:"Location 3", img:"3.jpeg", where:"You reached Location 3", t:0.73 },
+      { key:"4",     title:"Location 4", img:"4.jpeg", where:"Treasure spot: Location 4", t:1.00 }
+    ];
+
+    let currentIndex = 0;
+
+    const route = document.getElementById("route");
+    const walker = document.getElementById("walker");
+    const panelTitle = document.getElementById("panelTitle");
+    const panelImg = document.getElementById("panelImg");
+    const panelWhere = document.getElementById("panelWhere");
+    const pins = Array.from(document.querySelectorAll(".pin"));
+
+    function clamp01(x){ return Math.max(0, Math.min(1, x)); }
+    function pointOnPath(t){
+      const total = route.getTotalLength();
+      return route.getPointAtLength(total * clamp01(t));
+    }
+
+    let lastT = 0;
+    function placeWalkerAt(t){
+      const map = document.getElementById("map");
+      const rect = map.getBoundingClientRect();
+      const p = pointOnPath(t);
+      const x = (p.x / 1000) * rect.width;
+      const y = (p.y / 562) * rect.height;
+      walker.style.left = `${x}px`;
+      walker.style.top  = `${y}px`;
+    }
+
+    function setActivePin(key){
+      pins.forEach(pin => pin.classList.toggle("active", pin.dataset.stop === key));
+    }
+
+    let animReq=null;
+    function animateWalkerTo(targetT){
+      cancelAnimationFrame(animReq);
+      const startT = lastT;
+      const endT = targetT;
+      const duration = 900;
+      const start = performance.now();
+
+      function easeInOut(t){ return t<0.5 ? 2*t*t : 1 - Math.pow(-2*t+2,2)/2; }
+
+      function step(now){
+        const u = Math.min(1, (now - start) / duration);
+        const e = easeInOut(u);
+        const t = startT + (endT - startT) * e;
+        lastT = t;
+        placeWalkerAt(t);
+        if(u < 1) animReq = requestAnimationFrame(step);
+      }
+      animReq = requestAnimationFrame(step);
+    }
+
+    function renderStop(index, animate=true){
+      currentIndex = (index + stops.length) % stops.length;
+      const s = stops[currentIndex];
+
+      panelTitle.textContent = s.title;
+      panelImg.src = s.img;
+      panelWhere.textContent = s.where;
+
+      setActivePin(s.key);
+      animate ? animateWalkerTo(s.t) : (lastT=s.t, placeWalkerAt(s.t));
+    }
+
+    // Pins click
+    pins.forEach(pin=>{
+      pin.addEventListener("click", ()=>{
+        const idx = stops.findIndex(s=>s.key === pin.dataset.stop);
+        if(idx !== -1) renderStop(idx, true);
+      });
+    });
+
+    // Buttons
+    document.getElementById("prevBtn").addEventListener("click", ()=> renderStop(currentIndex-1, true));
+    document.getElementById("nextBtn").addEventListener("click", ()=> renderStop(currentIndex+1, true));
+    window.addEventListener("resize", ()=> placeWalkerAt(stops[currentIndex].t));
+
+    // Start
+    renderStop(0, false);
+  </script>
+</body>
+</html>
